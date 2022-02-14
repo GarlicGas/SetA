@@ -1,0 +1,85 @@
+﻿@inject HttpClient _client
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@using System.Security.Claims
+
+<EditForm Model="@expenses" OnValidSubmit="@OnValidSubmit">
+    <DataAnnotationsValidator />
+    <ValidationSummary />
+
+    <fieldset disabled="@Disabled">
+        <div class="form-group">
+            <label>Amount: </label>
+            <div>
+                <InputNumber @bind-Value="@expenses.Amount" class="form-control" />
+                <ValidationMessage For="@(() =>  expenses.Amount)" />
+            </div>
+        </div>
+
+        <div class="form-group">
+            <label>Payment: </label>
+            <div>
+                <InputSelect @bind-Value="expenses.PaymentMethodId" class="form-control">
+                    <option value="">-- Select Name --</option>
+                    @if (paymentMethods != null)
+                    {
+                        foreach (var paymentMethod in paymentMethods)
+                        {
+                            if (paymentMethod.Name == _currentUserName)
+                            {
+                                <option value="@paymentMethod.Id">@paymentMethod.Id</option>
+                            }
+                        }
+                    }
+                </InputSelect>
+                <ValidationMessage For="@(() => expenses.PaymentMethodId)" />
+            </div>
+        </div>
+    </fieldset>
+
+    @if (!Disabled)
+    {
+        <button type="submit" class="btn btn-success btn-block">
+            @ButtonText
+        </button>
+    }
+    <BackToList Target="expensess" />
+</EditForm>
+
+@code {
+    [Parameter] public bool Disabled { get; set; } = false;
+    [Parameter] public Expenses expenses { get; set; }
+    [Parameter] public string ButtonText { get; set; } = "Save";
+    [Parameter] public EventCallback OnValidSubmit { get; set; }
+
+    private List<AppUser> AppUsers;
+    private IEnumerable<Claim> _claims = Enumerable.Empty<Claim>();
+    private string _currentUserName;
+
+    private IList<PaymentMethod> paymentMethods;
+
+    protected async override Task OnInitializedAsync()
+    {
+        paymentMethods = await _client.GetFromJsonAsync<List<PaymentMethod>>($"{Endpoints.PaymentMethodsEndpoint}");
+
+        AppUsers = await _client.GetFromJsonAsync<List<AppUser>>($"{Endpoints.AccountsEndpoint}");
+        var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        var user = authState.User;
+
+        if (user.Identity.IsAuthenticated)
+        {
+            _claims = user.Claims;
+            //_currentUserName = user.Identity.Name;
+            if (_claims.Count() > 0)
+            {
+                foreach (var claim in _claims)
+                {
+                    if (claim.Type == "name")
+                    {
+                        _currentUserName = claim.Value;
+                        continue;
+                    }
+                }
+            }
+        }
+    }
+}

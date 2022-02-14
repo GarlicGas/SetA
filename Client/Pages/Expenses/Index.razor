@@ -1,0 +1,103 @@
+﻿@page "/expensess/"
+@inject HttpClient _client
+@inject IJSRuntime js
+@attribute [Authorize]
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@using System.Security.Claims
+
+<h3>Expenses</h3>
+<a href="/Expensess/create" class="btn btn-secondary">
+    <span class="oi oi-plus"></span>
+    Create New Expenses
+</a>
+<br />
+<br />
+
+@if (Expensess == null)
+{
+    <div class=" = " alert alert-info>Loading Expensess...</div>
+}
+else
+{
+    <table class="table table-responsive">
+        <thead>
+            <tr>
+                <th>Id</th>
+                <th>Name</th>
+                <th>Amount</th>
+                <th>Payment Method</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var Expenses in Expensess)
+            {
+                @if (Expenses.Name == _currentUserName)
+                {
+                    <tr>
+                        <td>@Expenses.Id</td>
+                        <td>@Expenses.Name</td>
+                        <td>@Expenses.Amount</td>
+                        <td>@Expenses.PaymentMethodId</td>
+                        <td>
+                            <a href="/Expensess/view/@Expenses.Id" class="btn btn-primary">
+                                <span class="oi oi-book"></span>
+                            </a>
+                            <a href="/Expensess/edit/@Expenses.Id" class="btn btn-warning">
+                                <span class="oi oi-pencil"></span>
+                            </a>
+                            <button class="btn btn-danger" @onclick="@(()=>Delete(Expenses.Id))">
+                                <span class="oi oi-delete"></span>
+                            </button>
+                        </td>
+                    </tr>
+                }
+            }
+        </tbody>
+    </table>
+}
+
+@code {
+    private List<Expenses> Expensess;
+    private List<AppUser> AppUsers;
+    private IEnumerable<Claim> _claims = Enumerable.Empty<Claim>();
+    private string _currentUserName;
+
+
+    protected async override Task OnInitializedAsync()
+    {
+        Expensess = await _client.GetFromJsonAsync<List<Expenses>>($"{Endpoints.ExpensesEndpoint}");
+
+        AppUsers = await _client.GetFromJsonAsync<List<AppUser>>($"{Endpoints.AccountsEndpoint}");
+        var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        var user = authState.User;
+
+        if (user.Identity.IsAuthenticated)
+        {
+            _claims = user.Claims;
+            //_currentUserName = user.Identity.Name;
+            if (_claims.Count() > 0)
+            {
+                foreach (var claim in _claims)
+                {
+                    if (claim.Type == "name")
+                    {
+                        _currentUserName = claim.Value;
+                        continue;
+                    }
+                }
+            }
+        }
+    }
+
+    async Task Delete(int ExpensesId)
+    {
+        var Expenses = Expensess.First(q => q.Id == ExpensesId);
+        var confirm = await js.InvokeAsync<bool>("confirm", $"Do you want to delete {Expenses.Name}?");
+        if (confirm)
+        {
+            await _client.DeleteAsync($"{Endpoints.ExpensesEndpoint}/{ExpensesId}");
+            await OnInitializedAsync();
+        }
+    }
+}
